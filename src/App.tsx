@@ -81,208 +81,96 @@ export default function App() {
     });
   }
 
-  const handleMouseDown = (e: React.MouseEvent) => {
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (isSpinning) return;
+
+    // Keep receiving moves even if pointer leaves the element
+    e.currentTarget.setPointerCapture(e.pointerId);
+
     setIsDragging(true);
     dragStart.current = { x: e.clientX, y: e.clientY };
     lastDragTime.current = Date.now();
     lastDragPos.current = { x: e.clientX, y: e.clientY };
   };
 
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging) return;
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDragging || isSpinning) return;
 
     const deltaX = e.clientX - dragStart.current.x;
     const deltaY = e.clientY - dragStart.current.y;
 
     const rotationSpeed = 0.005;
-    setRotation({
+
+    const newRotation = {
       x: currentRotation.current.x - deltaY * rotationSpeed,
       y: currentRotation.current.y + deltaX * rotationSpeed,
-    });
+    };
+
+    setRotation(newRotation);
 
     // Update velocity
     const currentTime = Date.now();
     const timeDelta = currentTime - lastDragTime.current;
+
     if (timeDelta > 0) {
       dragVelocity.current = {
         x: (e.clientX - lastDragPos.current.x) / timeDelta,
         y: (e.clientY - lastDragPos.current.y) / timeDelta,
       };
     }
+
     lastDragTime.current = currentTime;
     lastDragPos.current = { x: e.clientX, y: e.clientY };
   };
 
-  const handleMouseUp = () => {
+  const handlePointerUp = () => {
+    if (!isDragging) return;
+
     setIsDragging(false);
     currentRotation.current = rotation;
-    
-    // Start momentum spin to land on a circle
+
     const velocityMagnitude = Math.sqrt(
       dragVelocity.current.x ** 2 + dragVelocity.current.y ** 2
     );
-    
-    // Only spin if there's sufficient velocity
+
     if (velocityMagnitude > 0.1 && !isSpinning) {
       setIsSpinning(true);
-      
-      // Pick a random circle
+
       const randomCircle = circles[Math.floor(Math.random() * circles.length)];
-      
-      // Calculate momentum-based extra rotation (reduced by half)
+
       const rotationSpeed = 0.005;
-      const momentumX = -dragVelocity.current.y * rotationSpeed * 250; // Reduced from 500 to 250
-      const momentumY = dragVelocity.current.x * rotationSpeed * 250; // Reduced from 500 to 250
-      
-      // Target rotation includes momentum and lands on the selected circle
+      const momentumX = -dragVelocity.current.y * rotationSpeed * 250;
+      const momentumY = dragVelocity.current.x * rotationSpeed * 250;
+
       const targetY = -randomCircle.theta + rotation.y + momentumY;
       const targetX = -randomCircle.phi + Math.PI / 2 + momentumX;
-      
-      // Animate rotation
+
       const startRotation = { ...rotation };
       const startTime = Date.now();
-      const duration = 2500; // 2.5 seconds
-      
+      const duration = 2500;
+
       const animate = () => {
         const elapsed = Date.now() - startTime;
         const progress = Math.min(elapsed / duration, 1);
-        
-        // Ease out cubic
         const eased = 1 - Math.pow(1 - progress, 3);
-        
+
         const newRotation = {
           x: startRotation.x + (targetX - startRotation.x) * eased,
           y: startRotation.y + (targetY - startRotation.y) * eased,
         };
-        
+
         setRotation(newRotation);
         currentRotation.current = newRotation;
-        
-        if (progress < 1) {
-          requestAnimationFrame(animate);
-        } else {
-          setIsSpinning(false);
-        }
+
+        if (progress < 1) requestAnimationFrame(animate);
+        else setIsSpinning(false);
       };
-      
+
       requestAnimationFrame(animate);
     }
-    
-    // Reset velocity
+
     dragVelocity.current = { x: 0, y: 0 };
   };
-
-  // Add native touch event listeners with passive: false to enable preventDefault
-  useEffect(() => {
-    const container = sphereContainerRef.current;
-    if (!container) return;
-
-    const handleTouchStartNative = (e: TouchEvent) => {
-      if (e.touches.length !== 1) return;
-      const touch = e.touches[0];
-      setIsDragging(true);
-      dragStart.current = { x: touch.clientX, y: touch.clientY };
-      lastDragTime.current = Date.now();
-      lastDragPos.current = { x: touch.clientX, y: touch.clientY };
-    };
-
-    const handleTouchMoveNative = (e: TouchEvent) => {
-      if (!isDragging || e.touches.length !== 1) return;
-      e.preventDefault(); // This prevents scrolling
-      
-      const touch = e.touches[0];
-      const deltaX = touch.clientX - dragStart.current.x;
-      const deltaY = touch.clientY - dragStart.current.y;
-
-      const rotationSpeed = 0.005;
-      setRotation({
-        x: currentRotation.current.x - deltaY * rotationSpeed,
-        y: currentRotation.current.y + deltaX * rotationSpeed,
-      });
-
-      // Update velocity
-      const currentTime = Date.now();
-      const timeDelta = currentTime - lastDragTime.current;
-      if (timeDelta > 0) {
-        dragVelocity.current = {
-          x: (touch.clientX - lastDragPos.current.x) / timeDelta,
-          y: (touch.clientY - lastDragPos.current.y) / timeDelta,
-        };
-      }
-      lastDragTime.current = currentTime;
-      lastDragPos.current = { x: touch.clientX, y: touch.clientY };
-    };
-
-    const handleTouchEndNative = () => {
-      setIsDragging(false);
-      currentRotation.current = rotation;
-      
-      // Start momentum spin to land on a circle
-      const velocityMagnitude = Math.sqrt(
-        dragVelocity.current.x ** 2 + dragVelocity.current.y ** 2
-      );
-      
-      // Only spin if there's sufficient velocity
-      if (velocityMagnitude > 0.1 && !isSpinning) {
-        setIsSpinning(true);
-        
-        // Pick a random circle
-        const randomCircle = circles[Math.floor(Math.random() * circles.length)];
-        
-        // Calculate momentum-based extra rotation
-        const rotationSpeed = 0.005;
-        const momentumX = -dragVelocity.current.y * rotationSpeed * 250;
-        const momentumY = dragVelocity.current.x * rotationSpeed * 250;
-        
-        // Target rotation includes momentum and lands on the selected circle
-        const targetY = -randomCircle.theta + rotation.y + momentumY;
-        const targetX = -randomCircle.phi + Math.PI / 2 + momentumX;
-        
-        // Animate rotation
-        const startRotation = { ...rotation };
-        const startTime = Date.now();
-        const duration = 2500;
-        
-        const animate = () => {
-          const elapsed = Date.now() - startTime;
-          const progress = Math.min(elapsed / duration, 1);
-          
-          // Ease out cubic
-          const eased = 1 - Math.pow(1 - progress, 3);
-          
-          const newRotation = {
-            x: startRotation.x + (targetX - startRotation.x) * eased,
-            y: startRotation.y + (targetY - startRotation.y) * eased,
-          };
-          
-          setRotation(newRotation);
-          currentRotation.current = newRotation;
-          
-          if (progress < 1) {
-            requestAnimationFrame(animate);
-          } else {
-            setIsSpinning(false);
-          }
-        };
-        
-        requestAnimationFrame(animate);
-      }
-      
-      // Reset velocity
-      dragVelocity.current = { x: 0, y: 0 };
-    };
-
-    // Add event listeners with passive: false to allow preventDefault
-    container.addEventListener('touchstart', handleTouchStartNative, { passive: false });
-    container.addEventListener('touchmove', handleTouchMoveNative, { passive: false });
-    container.addEventListener('touchend', handleTouchEndNative, { passive: false });
-
-    return () => {
-      container.removeEventListener('touchstart', handleTouchStartNative);
-      container.removeEventListener('touchmove', handleTouchMoveNative);
-      container.removeEventListener('touchend', handleTouchEndNative);
-    };
-  }, [rotation, isDragging, isSpinning]);
 
   const handleSpin = () => {
     if (isSpinning) return;
@@ -333,72 +221,6 @@ export default function App() {
     
     requestAnimationFrame(animate);
   };
-
-  useEffect(() => {
-    const handleGlobalMouseUp = () => {
-      if (!isDragging) return;
-      
-      setIsDragging(false);
-      currentRotation.current = rotation;
-      
-      // Start momentum spin to land on a circle
-      const velocityMagnitude = Math.sqrt(
-        dragVelocity.current.x ** 2 + dragVelocity.current.y ** 2
-      );
-      
-      // Only spin if there's sufficient velocity
-      if (velocityMagnitude > 0.1 && !isSpinning) {
-        setIsSpinning(true);
-        
-        // Pick a random circle
-        const randomCircle = circles[Math.floor(Math.random() * circles.length)];
-        
-        // Calculate momentum-based extra rotation (reduced by half)
-        const rotationSpeed = 0.005;
-        const momentumX = -dragVelocity.current.y * rotationSpeed * 250; // Reduced from 500 to 250
-        const momentumY = dragVelocity.current.x * rotationSpeed * 250; // Reduced from 500 to 250
-        
-        // Target rotation includes momentum and lands on the selected circle
-        const targetY = -randomCircle.theta + rotation.y + momentumY;
-        const targetX = -randomCircle.phi + Math.PI / 2 + momentumX;
-        
-        // Animate rotation
-        const startRotation = { ...rotation };
-        const startTime = Date.now();
-        const duration = 2500; // 2.5 seconds
-        
-        const animate = () => {
-          const elapsed = Date.now() - startTime;
-          const progress = Math.min(elapsed / duration, 1);
-          
-          // Ease out cubic
-          const eased = 1 - Math.pow(1 - progress, 3);
-          
-          const newRotation = {
-            x: startRotation.x + (targetX - startRotation.x) * eased,
-            y: startRotation.y + (targetY - startRotation.y) * eased,
-          };
-          
-          setRotation(newRotation);
-          currentRotation.current = newRotation;
-          
-          if (progress < 1) {
-            requestAnimationFrame(animate);
-          } else {
-            setIsSpinning(false);
-          }
-        };
-        
-        requestAnimationFrame(animate);
-      }
-      
-      // Reset velocity
-      dragVelocity.current = { x: 0, y: 0 };
-    };
-
-    window.addEventListener('mouseup', handleGlobalMouseUp);
-    return () => window.removeEventListener('mouseup', handleGlobalMouseUp);
-  }, [rotation, isDragging, isSpinning]);
 
   // Camera effect
   useEffect(() => {
@@ -560,10 +382,15 @@ export default function App() {
             height: 'min(700px, 90vw)',
             maxHeight: '60vh',
             maxWidth: '60vh',
+            touchAction: 'none',
+            overscrollBehavior: 'none',
+            WebkitUserSelect: 'none',
+            WebkitTouchCallout: 'none',
           }}
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
           ref={sphereContainerRef}
         >
           <div className="relative w-full h-full flex items-center justify-center">
