@@ -373,7 +373,7 @@ export default function App() {
     .sort((a, b) => a.pos.z - b.pos.z);
 
   return (
-    <div className="w-screen h-screen overflow-hidden select-none relative" style={{ backgroundColor: '#00001E' }}>
+    <div className="w-screen h-screen overflow-hidden select-none relative touch-none" style={{ backgroundColor: '#00001E', position: 'fixed', inset: 0 }}>
       {/* Camera Background */}
       {isCameraOn && (
         <video
@@ -410,12 +410,12 @@ export default function App() {
       />
       
       {/* Title */}
-      <div className="absolute top-8 left-1/2 -translate-x-1/2 z-10 px-1">
+      <div className="absolute top-3 md:top-8 left-1/2 -translate-x-1/2 z-10 px-1">
         <h1 
           className="md:whitespace-nowrap text-center max-w-[95vw]"
           style={{
             fontFamily: '"Rock 3D", system-ui',
-            fontSize: 'clamp(2rem, 8vw, 4rem)',
+            fontSize: 'clamp(1.5rem, 8vw, 4rem)',
             color: 'white',
             textShadow: '0 0 20px rgba(255, 255, 255, 0.3), 0 0 40px rgba(138, 43, 226, 0.4)',
           }}
@@ -427,9 +427,9 @@ export default function App() {
       {/* Camera Toggle Button */}
       <button
         onClick={toggleCamera}
-        className="absolute top-8 right-4 md:right-8 z-10 px-4 py-2 rounded-full border border-white/20 transition-all duration-300 hover:bg-white/15 hover:border-white/30 backdrop-blur-sm"
+        className="absolute top-3 md:top-8 right-3 md:right-8 z-10 px-3 md:px-4 py-1.5 md:py-2 rounded-full border border-white/20 transition-all duration-300 hover:bg-white/15 hover:border-white/30 backdrop-blur-sm"
         style={{
-          fontSize: '14px',
+          fontSize: '12px',
           color: 'rgba(255, 255, 255, 0.6)',
         }}
       >
@@ -552,14 +552,13 @@ export default function App() {
       </div>
 
       {/* Instructions and Button */}
-      <div className="absolute bottom-12 left-1/2 -translate-x-1/2 flex flex-col items-center gap-6">
-        <p className="text-white/60 text-center" style={{ fontSize: '18px' }}>Drag to spin for your prediction.</p>
+      <div className="absolute bottom-4 md:bottom-12 left-1/2 -translate-x-1/2 flex flex-col items-center gap-3 md:gap-6">
+        <p className="text-white/60 text-center text-sm md:text-lg">Drag to spin for your prediction.</p>
         <button
           onClick={handleSpin}
           disabled={isSpinning}
-          className="px-6 py-2 rounded-full border border-white/20 transition-all duration-300 hover:bg-white/15 hover:border-white/30 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="px-4 md:px-6 py-1.5 md:py-2 rounded-full border border-white/20 transition-all duration-300 hover:bg-white/15 hover:border-white/30 disabled:opacity-50 disabled:cursor-not-allowed text-xs md:text-sm"
           style={{
-            fontSize: '14px',
             color: 'rgba(255, 255, 255, 0.6)',
           }}
         >
@@ -568,8 +567,8 @@ export default function App() {
       </div>
 
       {/* Attribution */}
-      <div className="absolute bottom-3 left-1/2 -translate-x-1/2">
-        <p className="text-white/40 italic text-center" style={{ fontSize: '11px' }}>A project by Liza Karimova.</p>
+      <div className="absolute bottom-1 md:bottom-3 left-1/2 -translate-x-1/2">
+        <p className="text-white/40 italic text-center text-[9px] md:text-[11px]">A project by Liza Karimova.</p>
       </div>
 
       {/* Camera Error Message */}
