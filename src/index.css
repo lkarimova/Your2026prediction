@@ -542,10 +542,6 @@
     cursor: grab;
   }
 
-  .touch-none {
-    touch-action: none;
-  }
-
   .resize {
     resize: both;
   }

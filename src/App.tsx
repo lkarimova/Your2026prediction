@@ -172,101 +172,117 @@ export default function App() {
     dragVelocity.current = { x: 0, y: 0 };
   };
 
-  // Touch event handlers
-  const handleTouchStart = (e: React.TouchEvent) => {
-    if (e.touches.length !== 1) return;
-    const touch = e.touches[0];
-    setIsDragging(true);
-    dragStart.current = { x: touch.clientX, y: touch.clientY };
-    lastDragTime.current = Date.now();
-    lastDragPos.current = { x: touch.clientX, y: touch.clientY };
-  };
+  // Add native touch event listeners with passive: false to enable preventDefault
+  useEffect(() => {
+    const container = sphereContainerRef.current;
+    if (!container) return;
 
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (!isDragging || e.touches.length !== 1) return;
-    e.preventDefault(); // Prevent scrolling while dragging
-    
-    const touch = e.touches[0];
-    const deltaX = touch.clientX - dragStart.current.x;
-    const deltaY = touch.clientY - dragStart.current.y;
+    const handleTouchStartNative = (e: TouchEvent) => {
+      if (e.touches.length !== 1) return;
+      const touch = e.touches[0];
+      setIsDragging(true);
+      dragStart.current = { x: touch.clientX, y: touch.clientY };
+      lastDragTime.current = Date.now();
+      lastDragPos.current = { x: touch.clientX, y: touch.clientY };
+    };
 
-    const rotationSpeed = 0.005;
-    setRotation({
-      x: currentRotation.current.x - deltaY * rotationSpeed,
-      y: currentRotation.current.y + deltaX * rotationSpeed,
-    });
-
-    // Update velocity
-    const currentTime = Date.now();
-    const timeDelta = currentTime - lastDragTime.current;
-    if (timeDelta > 0) {
-      dragVelocity.current = {
-        x: (touch.clientX - lastDragPos.current.x) / timeDelta,
-        y: (touch.clientY - lastDragPos.current.y) / timeDelta,
-      };
-    }
-    lastDragTime.current = currentTime;
-    lastDragPos.current = { x: touch.clientX, y: touch.clientY };
-  };
-
-  const handleTouchEnd = () => {
-    setIsDragging(false);
-    currentRotation.current = rotation;
-    
-    // Start momentum spin to land on a circle
-    const velocityMagnitude = Math.sqrt(
-      dragVelocity.current.x ** 2 + dragVelocity.current.y ** 2
-    );
-    
-    // Only spin if there's sufficient velocity
-    if (velocityMagnitude > 0.1 && !isSpinning) {
-      setIsSpinning(true);
+    const handleTouchMoveNative = (e: TouchEvent) => {
+      if (!isDragging || e.touches.length !== 1) return;
+      e.preventDefault(); // This prevents scrolling
       
-      // Pick a random circle
-      const randomCircle = circles[Math.floor(Math.random() * circles.length)];
-      
-      // Calculate momentum-based extra rotation
+      const touch = e.touches[0];
+      const deltaX = touch.clientX - dragStart.current.x;
+      const deltaY = touch.clientY - dragStart.current.y;
+
       const rotationSpeed = 0.005;
-      const momentumX = -dragVelocity.current.y * rotationSpeed * 250;
-      const momentumY = dragVelocity.current.x * rotationSpeed * 250;
+      setRotation({
+        x: currentRotation.current.x - deltaY * rotationSpeed,
+        y: currentRotation.current.y + deltaX * rotationSpeed,
+      });
+
+      // Update velocity
+      const currentTime = Date.now();
+      const timeDelta = currentTime - lastDragTime.current;
+      if (timeDelta > 0) {
+        dragVelocity.current = {
+          x: (touch.clientX - lastDragPos.current.x) / timeDelta,
+          y: (touch.clientY - lastDragPos.current.y) / timeDelta,
+        };
+      }
+      lastDragTime.current = currentTime;
+      lastDragPos.current = { x: touch.clientX, y: touch.clientY };
+    };
+
+    const handleTouchEndNative = () => {
+      setIsDragging(false);
+      currentRotation.current = rotation;
       
-      // Target rotation includes momentum and lands on the selected circle
-      const targetY = -randomCircle.theta + rotation.y + momentumY;
-      const targetX = -randomCircle.phi + Math.PI / 2 + momentumX;
+      // Start momentum spin to land on a circle
+      const velocityMagnitude = Math.sqrt(
+        dragVelocity.current.x ** 2 + dragVelocity.current.y ** 2
+      );
       
-      // Animate rotation
-      const startRotation = { ...rotation };
-      const startTime = Date.now();
-      const duration = 2500;
-      
-      const animate = () => {
-        const elapsed = Date.now() - startTime;
-        const progress = Math.min(elapsed / duration, 1);
+      // Only spin if there's sufficient velocity
+      if (velocityMagnitude > 0.1 && !isSpinning) {
+        setIsSpinning(true);
         
-        // Ease out cubic
-        const eased = 1 - Math.pow(1 - progress, 3);
+        // Pick a random circle
+        const randomCircle = circles[Math.floor(Math.random() * circles.length)];
         
-        const newRotation = {
-          x: startRotation.x + (targetX - startRotation.x) * eased,
-          y: startRotation.y + (targetY - startRotation.y) * eased,
+        // Calculate momentum-based extra rotation
+        const rotationSpeed = 0.005;
+        const momentumX = -dragVelocity.current.y * rotationSpeed * 250;
+        const momentumY = dragVelocity.current.x * rotationSpeed * 250;
+        
+        // Target rotation includes momentum and lands on the selected circle
+        const targetY = -randomCircle.theta + rotation.y + momentumY;
+        const targetX = -randomCircle.phi + Math.PI / 2 + momentumX;
+        
+        // Animate rotation
+        const startRotation = { ...rotation };
+        const startTime = Date.now();
+        const duration = 2500;
+        
+        const animate = () => {
+          const elapsed = Date.now() - startTime;
+          const progress = Math.min(elapsed / duration, 1);
+          
+          // Ease out cubic
+          const eased = 1 - Math.pow(1 - progress, 3);
+          
+          const newRotation = {
+            x: startRotation.x + (targetX - startRotation.x) * eased,
+            y: startRotation.y + (targetY - startRotation.y) * eased,
+          };
+          
+          setRotation(newRotation);
+          currentRotation.current = newRotation;
+          
+          if (progress < 1) {
+            requestAnimationFrame(animate);
+          } else {
+            setIsSpinning(false);
+          }
         };
         
-        setRotation(newRotation);
-        currentRotation.current = newRotation;
-        
-        if (progress < 1) {
-          requestAnimationFrame(animate);
-        } else {
-          setIsSpinning(false);
-        }
-      };
+        requestAnimationFrame(animate);
+      }
       
-      requestAnimationFrame(animate);
-    }
-    
-    // Reset velocity
-    dragVelocity.current = { x: 0, y: 0 };
-  };
+      // Reset velocity
+      dragVelocity.current = { x: 0, y: 0 };
+    };
+
+    // Add event listeners with passive: false to allow preventDefault
+    container.addEventListener('touchstart', handleTouchStartNative, { passive: false });
+    container.addEventListener('touchmove', handleTouchMoveNative, { passive: false });
+    container.addEventListener('touchend', handleTouchEndNative, { passive: false });
+
+    return () => {
+      container.removeEventListener('touchstart', handleTouchStartNative);
+      container.removeEventListener('touchmove', handleTouchMoveNative);
+      container.removeEventListener('touchend', handleTouchEndNative);
+    };
+  }, [rotation, isDragging, isSpinning]);
 
   const handleSpin = () => {
     if (isSpinning) return;
@@ -470,7 +486,7 @@ export default function App() {
     .sort((a, b) => a.pos.z - b.pos.z);
 
   return (
-    <div className="w-screen h-screen overflow-hidden select-none relative touch-none" style={{ backgroundColor: '#00001E', position: 'fixed', inset: 0, touchAction: 'none' }}>
+    <div className="w-screen h-screen overflow-hidden select-none relative" style={{ backgroundColor: '#00001E', position: 'fixed', inset: 0 }}>
       {/* Camera Background */}
       {isCameraOn && (
         <video
@@ -548,9 +564,6 @@ export default function App() {
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
-          onTouchStart={handleTouchStart}
-          onTouchMove={handleTouchMove}
-          onTouchEnd={handleTouchEnd}
           ref={sphereContainerRef}
         >
           <div className="relative w-full h-full flex items-center justify-center">
