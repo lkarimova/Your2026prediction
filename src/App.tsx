@@ -24,6 +24,7 @@ export default function App() {
   const dragVelocity = useRef({ x: 0, y: 0 });
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const sphereContainerRef = useRef<HTMLDivElement>(null);
 
   // Create circles distributed on a sphere using Fibonacci sphere algorithm
   const phrases = [
@@ -141,6 +142,102 @@ export default function App() {
       const startRotation = { ...rotation };
       const startTime = Date.now();
       const duration = 2500; // 2.5 seconds
+      
+      const animate = () => {
+        const elapsed = Date.now() - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        
+        // Ease out cubic
+        const eased = 1 - Math.pow(1 - progress, 3);
+        
+        const newRotation = {
+          x: startRotation.x + (targetX - startRotation.x) * eased,
+          y: startRotation.y + (targetY - startRotation.y) * eased,
+        };
+        
+        setRotation(newRotation);
+        currentRotation.current = newRotation;
+        
+        if (progress < 1) {
+          requestAnimationFrame(animate);
+        } else {
+          setIsSpinning(false);
+        }
+      };
+      
+      requestAnimationFrame(animate);
+    }
+    
+    // Reset velocity
+    dragVelocity.current = { x: 0, y: 0 };
+  };
+
+  // Touch event handlers
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length !== 1) return;
+    const touch = e.touches[0];
+    setIsDragging(true);
+    dragStart.current = { x: touch.clientX, y: touch.clientY };
+    lastDragTime.current = Date.now();
+    lastDragPos.current = { x: touch.clientX, y: touch.clientY };
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isDragging || e.touches.length !== 1) return;
+    e.preventDefault(); // Prevent scrolling while dragging
+    
+    const touch = e.touches[0];
+    const deltaX = touch.clientX - dragStart.current.x;
+    const deltaY = touch.clientY - dragStart.current.y;
+
+    const rotationSpeed = 0.005;
+    setRotation({
+      x: currentRotation.current.x - deltaY * rotationSpeed,
+      y: currentRotation.current.y + deltaX * rotationSpeed,
+    });
+
+    // Update velocity
+    const currentTime = Date.now();
+    const timeDelta = currentTime - lastDragTime.current;
+    if (timeDelta > 0) {
+      dragVelocity.current = {
+        x: (touch.clientX - lastDragPos.current.x) / timeDelta,
+        y: (touch.clientY - lastDragPos.current.y) / timeDelta,
+      };
+    }
+    lastDragTime.current = currentTime;
+    lastDragPos.current = { x: touch.clientX, y: touch.clientY };
+  };
+
+  const handleTouchEnd = () => {
+    setIsDragging(false);
+    currentRotation.current = rotation;
+    
+    // Start momentum spin to land on a circle
+    const velocityMagnitude = Math.sqrt(
+      dragVelocity.current.x ** 2 + dragVelocity.current.y ** 2
+    );
+    
+    // Only spin if there's sufficient velocity
+    if (velocityMagnitude > 0.1 && !isSpinning) {
+      setIsSpinning(true);
+      
+      // Pick a random circle
+      const randomCircle = circles[Math.floor(Math.random() * circles.length)];
+      
+      // Calculate momentum-based extra rotation
+      const rotationSpeed = 0.005;
+      const momentumX = -dragVelocity.current.y * rotationSpeed * 250;
+      const momentumY = dragVelocity.current.x * rotationSpeed * 250;
+      
+      // Target rotation includes momentum and lands on the selected circle
+      const targetY = -randomCircle.theta + rotation.y + momentumY;
+      const targetX = -randomCircle.phi + Math.PI / 2 + momentumX;
+      
+      // Animate rotation
+      const startRotation = { ...rotation };
+      const startTime = Date.now();
+      const duration = 2500;
       
       const animate = () => {
         const elapsed = Date.now() - startTime;
@@ -373,7 +470,7 @@ export default function App() {
     .sort((a, b) => a.pos.z - b.pos.z);
 
   return (
-    <div className="w-screen h-screen overflow-hidden select-none relative touch-none" style={{ backgroundColor: '#00001E', position: 'fixed', inset: 0 }}>
+    <div className="w-screen h-screen overflow-hidden select-none relative touch-none" style={{ backgroundColor: '#00001E', position: 'fixed', inset: 0, touchAction: 'none' }}>
       {/* Camera Background */}
       {isCameraOn && (
         <video
@@ -410,14 +507,15 @@ export default function App() {
       />
       
       {/* Title */}
-      <div className="absolute top-3 md:top-8 left-1/2 -translate-x-1/2 z-10 px-1">
+      <div className="absolute top-2 md:top-6 left-1/2 -translate-x-1/2 z-10 px-1">
         <h1 
           className="md:whitespace-nowrap text-center max-w-[95vw]"
           style={{
             fontFamily: '"Rock 3D", system-ui',
-            fontSize: 'clamp(1.5rem, 8vw, 4rem)',
+            fontSize: 'clamp(1.2rem, 6vw, 3.5rem)',
             color: 'white',
             textShadow: '0 0 20px rgba(255, 255, 255, 0.3), 0 0 40px rgba(138, 43, 226, 0.4)',
+            lineHeight: '1.2',
           }}
         >
           Your 2026 Prediction
@@ -427,9 +525,9 @@ export default function App() {
       {/* Camera Toggle Button */}
       <button
         onClick={toggleCamera}
-        className="absolute top-3 md:top-8 right-3 md:right-8 z-10 px-3 md:px-4 py-1.5 md:py-2 rounded-full border border-white/20 transition-all duration-300 hover:bg-white/15 hover:border-white/30 backdrop-blur-sm"
+        className="absolute top-2 md:top-6 right-2 md:right-6 z-10 px-2 md:px-3 py-1 md:py-1.5 rounded-full border border-white/20 transition-all duration-300 hover:bg-white/15 hover:border-white/30 backdrop-blur-sm"
         style={{
-          fontSize: '12px',
+          fontSize: '10px',
           color: 'rgba(255, 255, 255, 0.6)',
         }}
       >
@@ -437,17 +535,23 @@ export default function App() {
       </button>
 
       {/* Sphere Container */}
-      <div className="w-full h-full flex items-center justify-center">
+      <div className="w-full h-full flex items-center justify-center" style={{ padding: 'clamp(60px, 15vh, 100px) 0' }}>
         {/* Draggable Sphere Area */}
         <div
           className="relative cursor-grab active:cursor-grabbing"
           style={{
-            width: '700px',
-            height: '700px',
+            width: 'min(700px, 90vw)',
+            height: 'min(700px, 90vw)',
+            maxHeight: '60vh',
+            maxWidth: '60vh',
           }}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+          ref={sphereContainerRef}
         >
           <div className="relative w-full h-full flex items-center justify-center">
             {sortedCircles.map(({ circle, pos }) => {
@@ -552,12 +656,12 @@ export default function App() {
       </div>
 
       {/* Instructions and Button */}
-      <div className="absolute bottom-4 md:bottom-12 left-1/2 -translate-x-1/2 flex flex-col items-center gap-3 md:gap-6">
-        <p className="text-white/60 text-center text-sm md:text-lg">Drag to spin for your prediction.</p>
+      <div className="absolute bottom-2 md:bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 md:gap-4">
+        <p className="text-white/60 text-center text-xs md:text-base">Drag to spin for your prediction.</p>
         <button
           onClick={handleSpin}
           disabled={isSpinning}
-          className="px-4 md:px-6 py-1.5 md:py-2 rounded-full border border-white/20 transition-all duration-300 hover:bg-white/15 hover:border-white/30 disabled:opacity-50 disabled:cursor-not-allowed text-xs md:text-sm"
+          className="px-3 md:px-5 py-1 md:py-1.5 rounded-full border border-white/20 transition-all duration-300 hover:bg-white/15 hover:border-white/30 disabled:opacity-50 disabled:cursor-not-allowed text-xs md:text-sm"
           style={{
             color: 'rgba(255, 255, 255, 0.6)',
           }}
@@ -567,8 +671,8 @@ export default function App() {
       </div>
 
       {/* Attribution */}
-      <div className="absolute bottom-1 md:bottom-3 left-1/2 -translate-x-1/2">
-        <p className="text-white/40 italic text-center text-[9px] md:text-[11px]">A project by Liza Karimova.</p>
+      <div className="absolute bottom-0.5 md:bottom-1 left-1/2 -translate-x-1/2">
+        <p className="text-white/40 italic text-center text-[8px] md:text-[10px]">A project by Liza Karimova.</p>
       </div>
 
       {/* Camera Error Message */}
