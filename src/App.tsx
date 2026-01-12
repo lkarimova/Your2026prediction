@@ -17,6 +17,9 @@ export default function App() {
   const [isSpinning, setIsSpinning] = useState(false);
   const [isCameraOn, setIsCameraOn] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
+  const [shakeEnabled, setShakeEnabled] = useState(false);
+  const [needsIOSPermission, setNeedsIOSPermission] = useState(false);
   const dragStart = useRef({ x: 0, y: 0 });
   const currentRotation = useRef({ x: Math.PI / 3, y: Math.PI / 4 });
   const lastDragTime = useRef(0);
@@ -25,6 +28,33 @@ export default function App() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const sphereContainerRef = useRef<HTMLDivElement>(null);
+  const lastShakeTime = useRef(0);
+  const lastSampleTime = useRef(0);
+
+  // Shake detection configuration
+  const SHAKE_CONFIG = {
+    threshold: 15,
+    cooldown: 1000,
+    sampleRate: 100,
+    requireAllAxes: false,
+    enableInBackground: false,
+  };
+
+  // Detect mobile device
+  useEffect(() => {
+    const checkMobile = () => {
+      const mobile = window.matchMedia('(max-width: 768px)').matches;
+      setIsMobile(mobile);
+      
+      // Check if we need iOS permission
+      if (mobile && typeof (DeviceMotionEvent as any).requestPermission === 'function') {
+        setNeedsIOSPermission(true);
+      }
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   // Create circles distributed on a sphere using Fibonacci sphere algorithm
   const phrases = [
@@ -277,6 +307,72 @@ export default function App() {
     }
   }, [cameraError]);
 
+  // Shake detection
+  useEffect(() => {
+    if (!shakeEnabled || !isMobile) return;
+
+    const handleDeviceMotion = (event: DeviceMotionEvent) => {
+      // Don't listen if page is hidden
+      if (SHAKE_CONFIG.enableInBackground === false && document.hidden) return;
+
+      // Check if already spinning
+      if (isSpinning) return;
+
+      const currentTime = Date.now();
+      const timeDelta = currentTime - lastSampleTime.current;
+
+      // Sample rate limiting
+      if (timeDelta < SHAKE_CONFIG.sampleRate) return;
+
+      const { x, y, z } = event.accelerationIncludingGravity || { x: 0, y: 0, z: 0 };
+      
+      if (x === null || y === null || z === null) return;
+      
+      const acceleration = Math.sqrt(x * x + y * y + z * z);
+
+      if (acceleration > SHAKE_CONFIG.threshold) {
+        const shakeTimeDelta = currentTime - lastShakeTime.current;
+
+        if (shakeTimeDelta > SHAKE_CONFIG.cooldown) {
+          // Haptic feedback
+          if ('vibrate' in navigator) {
+            navigator.vibrate(200);
+          }
+          
+          handleSpin();
+          lastShakeTime.current = currentTime;
+        }
+      }
+
+      lastSampleTime.current = currentTime;
+    };
+
+    window.addEventListener('devicemotion', handleDeviceMotion);
+
+    return () => {
+      window.removeEventListener('devicemotion', handleDeviceMotion);
+    };
+  }, [shakeEnabled, isMobile, isSpinning]);
+
+  // Handle shake enable button
+  const enableShake = async () => {
+    if (needsIOSPermission) {
+      try {
+        const permission = await (DeviceMotionEvent as any).requestPermission();
+        if (permission === 'granted') {
+          setShakeEnabled(true);
+        } else {
+          setCameraError('Motion sensor permission denied. Please allow in Settings.');
+        }
+      } catch (error) {
+        setCameraError('Failed to request motion sensor permission.');
+      }
+    } else {
+      // Non-iOS, just enable it
+      setShakeEnabled(true);
+    }
+  };
+
   // Calculate 3D position for each circle
   const getCirclePosition = (circle: Circle) => {
     const radius = 250;
@@ -361,22 +457,24 @@ export default function App() {
       </div>
 
       {/* Camera Toggle Button */}
-      <button
-        onClick={toggleCamera}
-        className="absolute top-2 md:top-6 right-2 md:right-6 z-10 px-2 md:px-3 py-1 md:py-1.5 rounded-full border border-white/20 transition-all duration-300 hover:bg-white/15 hover:border-white/30 backdrop-blur-sm"
-        style={{
-          fontSize: '10px',
-          color: 'rgba(255, 255, 255, 0.6)',
-        }}
-      >
-        {isCameraOn ? 'Camera Off' : 'Camera On'}
-      </button>
+      {!isMobile && (
+        <button
+          onClick={toggleCamera}
+          className="absolute top-2 md:top-6 right-2 md:right-6 z-10 px-2 md:px-3 py-1 md:py-1.5 rounded-full border border-white/20 transition-all duration-300 hover:bg-white/15 hover:border-white/30 backdrop-blur-sm"
+          style={{
+            fontSize: '10px',
+            color: 'rgba(255, 255, 255, 0.6)',
+          }}
+        >
+          {isCameraOn ? 'Camera Off' : 'Camera On'}
+        </button>
+      )}
 
       {/* Sphere Container */}
       <div className="w-full h-full flex items-center justify-center" style={{ padding: 'clamp(60px, 15vh, 100px) 0' }}>
         {/* Draggable Sphere Area */}
         <div
-          className="relative cursor-grab active:cursor-grabbing"
+          className={isMobile ? "relative cursor-pointer" : "relative cursor-grab active:cursor-grabbing"}
           style={{
             width: 'min(700px, 90vw)',
             height: 'min(700px, 90vw)',
@@ -387,10 +485,11 @@ export default function App() {
             WebkitUserSelect: 'none',
             WebkitTouchCallout: 'none',
           }}
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onPointerCancel={handlePointerUp}
+          onClick={isMobile ? handleSpin : undefined}
+          onPointerDown={!isMobile ? handlePointerDown : undefined}
+          onPointerMove={!isMobile ? handlePointerMove : undefined}
+          onPointerUp={!isMobile ? handlePointerUp : undefined}
+          onPointerCancel={!isMobile ? handlePointerUp : undefined}
           ref={sphereContainerRef}
         >
           <div className="relative w-full h-full flex items-center justify-center">
@@ -496,8 +595,28 @@ export default function App() {
       </div>
 
       {/* Instructions and Button */}
-      <div className="absolute bottom-2 md:bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 md:gap-4">
-        <p className="text-white/60 text-center text-xs md:text-base">Drag to spin for your prediction.</p>
+      <div className={`absolute left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 md:gap-4 ${isMobile ? 'bottom-12' : 'bottom-2 md:bottom-8'}`}>
+        {!isMobile && (
+          <p className="text-white/60 text-center text-xs md:text-base">
+            Drag to spin for your prediction.
+          </p>
+        )}
+        {isMobile && !shakeEnabled && (
+          <button
+            onClick={enableShake}
+            className="px-3 py-1 rounded-full border border-white/20 transition-all duration-300 hover:bg-white/15 hover:border-white/30 backdrop-blur-sm text-xs"
+            style={{
+              color: 'rgba(255, 255, 255, 0.6)',
+            }}
+          >
+            Enable Shake to Spin
+          </button>
+        )}
+        {isMobile && shakeEnabled && (
+          <p className="text-white/40 text-center text-xs">
+            Shake your phone to spin
+          </p>
+        )}
         <button
           onClick={handleSpin}
           disabled={isSpinning}
@@ -506,8 +625,19 @@ export default function App() {
             color: 'rgba(255, 255, 255, 0.6)',
           }}
         >
-          {isSpinning ? 'Spinning...' : 'Spin for me'}
+          {isSpinning ? 'Spinning...' : (isMobile ? 'Get Prediction' : 'Spin for me')}
         </button>
+        {isMobile && (
+          <button
+            onClick={toggleCamera}
+            className="px-3 py-1 rounded-full border border-white/20 transition-all duration-300 hover:bg-white/15 hover:border-white/30 backdrop-blur-sm text-xs"
+            style={{
+              color: 'rgba(255, 255, 255, 0.6)',
+            }}
+          >
+            {isCameraOn ? 'Camera Off' : 'Camera On'}
+          </button>
+        )}
       </div>
 
       {/* Attribution */}

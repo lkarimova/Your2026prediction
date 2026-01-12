@@ -421,6 +421,10 @@
     bottom: calc(var(--spacing) * 2);
   }
 
+  .bottom-12 {
+    bottom: calc(var(--spacing) * 12);
+  }
+
   .left-0 {
     left: calc(var(--spacing) * 0);
   }
@@ -509,6 +513,10 @@
     display: flex;
   }
 
+  .hidden {
+    display: none;
+  }
+
   .h-1\/3 {
     height: 33.3333%;
   }
@@ -540,6 +548,10 @@
 
   .cursor-grab {
     cursor: grab;
+  }
+
+  .cursor-pointer {
+    cursor: pointer;
   }
 
   .resize {
