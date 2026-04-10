@@ -11,7 +11,6 @@ interface Circle {
 }
 
 export default function App() {
-  // Initialize rotation to ensure no circle appears centered on load
   const [rotation, setRotation] = useState({ x: Math.PI / 3, y: Math.PI / 4 });
   const [isDragging, setIsDragging] = useState(false);
   const [isSpinning, setIsSpinning] = useState(false);
@@ -20,18 +19,21 @@ export default function App() {
   const [isMobile, setIsMobile] = useState(false);
   const [shakeEnabled, setShakeEnabled] = useState(false);
   const [needsIOSPermission, setNeedsIOSPermission] = useState(false);
+
   const dragStart = useRef({ x: 0, y: 0 });
   const currentRotation = useRef({ x: Math.PI / 3, y: Math.PI / 4 });
   const lastDragTime = useRef(0);
   const lastDragPos = useRef({ x: 0, y: 0 });
   const dragVelocity = useRef({ x: 0, y: 0 });
+  const hasExceededDragThreshold = useRef(false);
+  const dragThreshold = 8;
+
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const sphereContainerRef = useRef<HTMLDivElement>(null);
   const lastShakeTime = useRef(0);
   const lastSampleTime = useRef(0);
 
-  // Shake detection configuration
   const SHAKE_CONFIG = {
     threshold: 15,
     cooldown: 1000,
@@ -40,23 +42,21 @@ export default function App() {
     enableInBackground: false,
   };
 
-  // Detect mobile device
   useEffect(() => {
     const checkMobile = () => {
       const mobile = window.matchMedia('(max-width: 768px)').matches;
       setIsMobile(mobile);
-      
-      // Check if we need iOS permission
+
       if (mobile && typeof (DeviceMotionEvent as any).requestPermission === 'function') {
         setNeedsIOSPermission(true);
       }
     };
+
     checkMobile();
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // Create circles distributed on a sphere using Fibonacci sphere algorithm
   const phrases = [
     'Something small ends up being important',
     'A delay turns out to be useful',
@@ -77,22 +77,22 @@ export default function App() {
   ];
 
   const colors = [
-    { light: 'rgba(75, 60, 120, 0.8)', dark: 'rgba(25, 20, 45, 1)' }, // Dark purple
-    { light: 'rgba(40, 70, 130, 0.8)', dark: 'rgba(15, 25, 50, 1)' }, // Dark blue
-    { light: 'rgba(120, 45, 80, 0.8)', dark: 'rgba(45, 15, 35, 1)' }, // Dark pink
-    { light: 'rgba(30, 90, 60, 0.8)', dark: 'rgba(10, 35, 25, 1)' }, // Dark green
-    { light: 'rgba(130, 75, 40, 0.8)', dark: 'rgba(50, 25, 15, 1)' }, // Dark orange
-    { light: 'rgba(90, 50, 110, 0.8)', dark: 'rgba(35, 20, 45, 1)' }, // Dark purple-pink
-    { light: 'rgba(30, 80, 110, 0.8)', dark: 'rgba(10, 30, 45, 1)' }, // Dark sky blue
-    { light: 'rgba(110, 40, 55, 0.8)', dark: 'rgba(45, 15, 25, 1)' }, // Dark rose
-    { light: 'rgba(35, 95, 80, 0.8)', dark: 'rgba(15, 40, 35, 1)' }, // Dark teal
-    { light: 'rgba(100, 85, 25, 0.8)', dark: 'rgba(40, 35, 10, 1)' }, // Dark yellow
-    { light: 'rgba(70, 35, 100, 0.8)', dark: 'rgba(30, 15, 45, 1)' }, // Deep dark purple
-    { light: 'rgba(55, 55, 110, 0.8)', dark: 'rgba(20, 20, 45, 1)' }, // Dark indigo
-    { light: 'rgba(105, 40, 40, 0.8)', dark: 'rgba(45, 15, 15, 1)' }, // Dark red
-    { light: 'rgba(25, 85, 95, 0.8)', dark: 'rgba(10, 35, 40, 1)' }, // Dark cyan
-    { light: 'rgba(75, 100, 35, 0.8)', dark: 'rgba(30, 40, 15, 1)' }, // Dark lime
-    { light: 'rgba(95, 40, 105, 0.8)', dark: 'rgba(40, 15, 45, 1)' }, // Dark fuchsia
+    { light: 'rgba(75, 60, 120, 0.8)', dark: 'rgba(25, 20, 45, 1)' },
+    { light: 'rgba(40, 70, 130, 0.8)', dark: 'rgba(15, 25, 50, 1)' },
+    { light: 'rgba(120, 45, 80, 0.8)', dark: 'rgba(45, 15, 35, 1)' },
+    { light: 'rgba(30, 90, 60, 0.8)', dark: 'rgba(10, 35, 25, 1)' },
+    { light: 'rgba(130, 75, 40, 0.8)', dark: 'rgba(50, 25, 15, 1)' },
+    { light: 'rgba(90, 50, 110, 0.8)', dark: 'rgba(35, 20, 45, 1)' },
+    { light: 'rgba(30, 80, 110, 0.8)', dark: 'rgba(10, 30, 45, 1)' },
+    { light: 'rgba(110, 40, 55, 0.8)', dark: 'rgba(45, 15, 25, 1)' },
+    { light: 'rgba(35, 95, 80, 0.8)', dark: 'rgba(15, 40, 35, 1)' },
+    { light: 'rgba(100, 85, 25, 0.8)', dark: 'rgba(40, 35, 10, 1)' },
+    { light: 'rgba(70, 35, 100, 0.8)', dark: 'rgba(30, 15, 45, 1)' },
+    { light: 'rgba(55, 55, 110, 0.8)', dark: 'rgba(20, 20, 45, 1)' },
+    { light: 'rgba(105, 40, 40, 0.8)', dark: 'rgba(45, 15, 15, 1)' },
+    { light: 'rgba(25, 85, 95, 0.8)', dark: 'rgba(10, 35, 40, 1)' },
+    { light: 'rgba(75, 100, 35, 0.8)', dark: 'rgba(30, 40, 15, 1)' },
+    { light: 'rgba(95, 40, 105, 0.8)', dark: 'rgba(40, 15, 45, 1)' },
   ];
 
   const circles: Circle[] = [];
@@ -102,32 +102,44 @@ export default function App() {
   for (let i = 0; i < numCircles; i++) {
     const phi = Math.acos(1 - (2 * (i + 0.5)) / numCircles);
     const theta = (2 * Math.PI * i) / goldenRatio;
-    circles.push({ 
-      id: i, 
-      phi, 
-      theta, 
+    circles.push({
+      id: i,
+      phi,
+      theta,
       phrase: phrases[i],
-      color: colors[i]
+      color: colors[i],
     });
   }
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (isSpinning) return;
 
-    // Keep receiving moves even if pointer leaves the element
     e.currentTarget.setPointerCapture(e.pointerId);
 
-    setIsDragging(true);
+    setIsDragging(false);
+    hasExceededDragThreshold.current = false;
+
     dragStart.current = { x: e.clientX, y: e.clientY };
     lastDragTime.current = Date.now();
     lastDragPos.current = { x: e.clientX, y: e.clientY };
+    dragVelocity.current = { x: 0, y: 0 };
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!isDragging || isSpinning) return;
+    if (isSpinning) return;
 
-    const deltaX = e.clientX - dragStart.current.x;
-    const deltaY = e.clientY - dragStart.current.y;
+    const totalDeltaX = e.clientX - dragStart.current.x;
+    const totalDeltaY = e.clientY - dragStart.current.y;
+    const movedDistance = Math.sqrt(totalDeltaX ** 2 + totalDeltaY ** 2);
+
+    if (!hasExceededDragThreshold.current) {
+      if (movedDistance < dragThreshold) return;
+      hasExceededDragThreshold.current = true;
+      setIsDragging(true);
+    }
+
+    const deltaX = e.clientX - lastDragPos.current.x;
+    const deltaY = e.clientY - lastDragPos.current.y;
 
     const rotationSpeed = 0.005;
 
@@ -137,15 +149,15 @@ export default function App() {
     };
 
     setRotation(newRotation);
+    currentRotation.current = newRotation;
 
-    // Update velocity
     const currentTime = Date.now();
     const timeDelta = currentTime - lastDragTime.current;
 
     if (timeDelta > 0) {
       dragVelocity.current = {
-        x: (e.clientX - lastDragPos.current.x) / timeDelta,
-        y: (e.clientY - lastDragPos.current.y) / timeDelta,
+        x: deltaX / timeDelta,
+        y: deltaY / timeDelta,
       };
     }
 
@@ -153,106 +165,53 @@ export default function App() {
     lastDragPos.current = { x: e.clientX, y: e.clientY };
   };
 
-  const handlePointerUp = () => {
-    if (!isDragging) return;
-
-    setIsDragging(false);
-    currentRotation.current = rotation;
-
-    const velocityMagnitude = Math.sqrt(
-      dragVelocity.current.x ** 2 + dragVelocity.current.y ** 2
-    );
-
-    if (velocityMagnitude > 0.1 && !isSpinning) {
-      setIsSpinning(true);
-
-      const randomCircle = circles[Math.floor(Math.random() * circles.length)];
-
-      const rotationSpeed = 0.005;
-      const momentumX = -dragVelocity.current.y * rotationSpeed * 250;
-      const momentumY = dragVelocity.current.x * rotationSpeed * 250;
-
-      const targetY = -randomCircle.theta + rotation.y + momentumY;
-      const targetX = -randomCircle.phi + Math.PI / 2 + momentumX;
-
-      const startRotation = { ...rotation };
-      const startTime = Date.now();
-      const duration = 2500;
-
-      const animate = () => {
-        const elapsed = Date.now() - startTime;
-        const progress = Math.min(elapsed / duration, 1);
-        const eased = 1 - Math.pow(1 - progress, 3);
-
-        const newRotation = {
-          x: startRotation.x + (targetX - startRotation.x) * eased,
-          y: startRotation.y + (targetY - startRotation.y) * eased,
-        };
-
-        setRotation(newRotation);
-        currentRotation.current = newRotation;
-
-        if (progress < 1) requestAnimationFrame(animate);
-        else setIsSpinning(false);
-      };
-
-      requestAnimationFrame(animate);
+  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.currentTarget.hasPointerCapture?.(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId);
     }
 
+    setIsDragging(false);
+    hasExceededDragThreshold.current = false;
     dragVelocity.current = { x: 0, y: 0 };
   };
 
   const handleSpin = () => {
     if (isSpinning) return;
-    
+
     setIsSpinning(true);
-    
-    // Pick a random circle
+
     const randomCircle = circles[Math.floor(Math.random() * circles.length)];
-    
-    // Calculate target rotation to bring this circle to the center front
-    // We want the circle to end up with z at maximum (front) and x,y near 0 (center)
-    // For a sphere, max z happens when phi is close to 0
-    // We need: rotatedTheta = 0 (so rotation.y = -theta) 
-    // And we need to rotate X so the circle moves to phi ≈ 0
-    const targetY = -randomCircle.theta + currentRotation.current.y + Math.PI * 4; // Add 2 full rotations
-    
-    // Calculate target X rotation to bring the circle to the front
-    // The circle's original phi determines how much we need to rotate
-    // We want to rotate so that this circle ends up at phi ≈ 0 (top/front of sphere)
-    const targetX = -randomCircle.phi + Math.PI / 2; // Adjust to bring to center
-    
-    // Animate rotation
+
+    const targetY = -randomCircle.theta + currentRotation.current.y + Math.PI * 4;
+    const targetX = -randomCircle.phi + Math.PI / 2;
+
     const startRotation = { ...currentRotation.current };
     const startTime = Date.now();
-    const duration = 2500; // 2.5 seconds
-    
+    const duration = 2500;
+
     const animate = () => {
       const elapsed = Date.now() - startTime;
       const progress = Math.min(elapsed / duration, 1);
-      
-      // Ease out cubic
       const eased = 1 - Math.pow(1 - progress, 3);
-      
+
       const newRotation = {
         x: startRotation.x + (targetX - startRotation.x) * eased,
         y: startRotation.y + (targetY - startRotation.y) * eased,
       };
-      
+
       setRotation(newRotation);
       currentRotation.current = newRotation;
-      
+
       if (progress < 1) {
         requestAnimationFrame(animate);
       } else {
         setIsSpinning(false);
       }
     };
-    
+
     requestAnimationFrame(animate);
   };
 
-  // Camera effect
   useEffect(() => {
     const startCamera = async () => {
       try {
@@ -292,12 +251,11 @@ export default function App() {
 
   const toggleCamera = () => {
     if (!isCameraOn) {
-      setCameraError(null); // Clear any previous errors
+      setCameraError(null);
     }
     setIsCameraOn(!isCameraOn);
   };
 
-  // Auto-hide error message after 5 seconds
   useEffect(() => {
     if (cameraError) {
       const timer = setTimeout(() => {
@@ -307,38 +265,32 @@ export default function App() {
     }
   }, [cameraError]);
 
-  // Shake detection
   useEffect(() => {
     if (!shakeEnabled || !isMobile) return;
 
     const handleDeviceMotion = (event: DeviceMotionEvent) => {
-      // Don't listen if page is hidden
       if (SHAKE_CONFIG.enableInBackground === false && document.hidden) return;
-
-      // Check if already spinning
       if (isSpinning) return;
 
       const currentTime = Date.now();
       const timeDelta = currentTime - lastSampleTime.current;
 
-      // Sample rate limiting
       if (timeDelta < SHAKE_CONFIG.sampleRate) return;
 
       const { x, y, z } = event.accelerationIncludingGravity || { x: 0, y: 0, z: 0 };
-      
+
       if (x === null || y === null || z === null) return;
-      
+
       const acceleration = Math.sqrt(x * x + y * y + z * z);
 
       if (acceleration > SHAKE_CONFIG.threshold) {
         const shakeTimeDelta = currentTime - lastShakeTime.current;
 
         if (shakeTimeDelta > SHAKE_CONFIG.cooldown) {
-          // Haptic feedback
           if ('vibrate' in navigator) {
             navigator.vibrate(200);
           }
-          
+
           handleSpin();
           lastShakeTime.current = currentTime;
         }
@@ -354,7 +306,6 @@ export default function App() {
     };
   }, [shakeEnabled, isMobile, isSpinning]);
 
-  // Handle shake enable button
   const enableShake = async () => {
     if (needsIOSPermission) {
       try {
@@ -368,25 +319,20 @@ export default function App() {
         setCameraError('Failed to request motion sensor permission.');
       }
     } else {
-      // Non-iOS, just enable it
       setShakeEnabled(true);
     }
   };
 
-  // Calculate 3D position for each circle
   const getCirclePosition = (circle: Circle) => {
     const radius = 250;
 
-    // Apply rotation
     const rotatedPhi = circle.phi;
     const rotatedTheta = circle.theta + rotation.y;
 
-    // Spherical to Cartesian coordinates
     let x = radius * Math.sin(rotatedPhi) * Math.cos(rotatedTheta);
     let y = radius * Math.sin(rotatedPhi) * Math.sin(rotatedTheta);
     let z = radius * Math.cos(rotatedPhi);
 
-    // Apply X rotation
     const cosX = Math.cos(rotation.x);
     const sinX = Math.sin(rotation.x);
     const y2 = y * cosX - z * sinX;
@@ -395,7 +341,6 @@ export default function App() {
     return { x, y: y2, z: z2 };
   };
 
-  // Sort circles by z-index (back to front)
   const sortedCircles = [...circles]
     .map((circle) => {
       const pos = getCirclePosition(circle);
@@ -404,8 +349,10 @@ export default function App() {
     .sort((a, b) => a.pos.z - b.pos.z);
 
   return (
-    <div className="w-screen h-screen overflow-hidden select-none relative" style={{ backgroundColor: '#00001E', position: 'fixed', inset: 0 }}>
-      {/* Camera Background */}
+    <div
+      className="w-screen h-screen overflow-hidden select-none relative"
+      style={{ backgroundColor: '#00001E', position: 'fixed', inset: 0 }}
+    >
       {isCameraOn && (
         <video
           ref={videoRef}
@@ -417,7 +364,6 @@ export default function App() {
         />
       )}
 
-      {/* Orb Background */}
       {!isCameraOn && (
         <div className="absolute inset-0 w-full h-full flex items-center justify-center">
           <div style={{ width: '200%', height: '200%', position: 'relative', opacity: 0.8 }}>
@@ -432,17 +378,15 @@ export default function App() {
         </div>
       )}
 
-      {/* Edge Glow for Depth */}
-      <div 
+      <div
         className="absolute inset-0 pointer-events-none"
         style={{
           background: 'radial-gradient(ellipse at center, transparent 30%, rgba(255, 255, 255, 0.03) 70%, rgba(255, 255, 255, 0.08) 100%)',
         }}
       />
-      
-      {/* Title */}
+
       <div className="absolute top-2 md:top-6 left-1/2 -translate-x-1/2 z-10 px-1">
-        <h1 
+        <h1
           className="md:whitespace-nowrap text-center max-w-[95vw]"
           style={{
             fontFamily: '"Rock 3D", system-ui',
@@ -456,7 +400,6 @@ export default function App() {
         </h1>
       </div>
 
-      {/* Camera Toggle Button */}
       {!isMobile && (
         <button
           onClick={toggleCamera}
@@ -470,11 +413,9 @@ export default function App() {
         </button>
       )}
 
-      {/* Sphere Container */}
       <div className="w-full h-full flex items-center justify-center" style={{ padding: 'clamp(60px, 15vh, 100px) 0' }}>
-        {/* Draggable Sphere Area */}
         <div
-          className={isMobile ? "relative cursor-pointer" : "relative cursor-grab active:cursor-grabbing"}
+          className={isMobile ? 'relative cursor-pointer' : 'relative cursor-grab active:cursor-grabbing'}
           style={{
             width: 'min(700px, 90vw)',
             height: 'min(700px, 90vw)',
@@ -485,24 +426,19 @@ export default function App() {
             WebkitUserSelect: 'none',
             WebkitTouchCallout: 'none',
           }}
-          onClick={isMobile ? handleSpin : undefined}
-          onPointerDown={!isMobile ? handlePointerDown : undefined}
-          onPointerMove={!isMobile ? handlePointerMove : undefined}
-          onPointerUp={!isMobile ? handlePointerUp : undefined}
-          onPointerCancel={!isMobile ? handlePointerUp : undefined}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
           ref={sphereContainerRef}
         >
           <div className="relative w-full h-full flex items-center justify-center">
             {sortedCircles.map(({ circle, pos }) => {
-              // Calculate scale based on z position (closer = larger)
               const perspective = 1000;
               const scale = perspective / (perspective - pos.z);
               const size = 40 * scale;
 
-              // Calculate opacity based on z position
-              const opacity = 0.3 + (pos.z + 200) / 400 * 0.7;
-
-              // Determine if this circle is near the center
+              const opacity = 0.3 + ((pos.z + 200) / 400) * 0.7;
               const distanceFromCenter = Math.sqrt(pos.x * pos.x + pos.y * pos.y);
               const isCenter = distanceFromCenter < 60 && pos.z > 120;
 
@@ -550,21 +486,18 @@ export default function App() {
                           }
                     }
                   >
-                    {/* Liquid glass shine effects */}
                     <div
                       className="absolute inset-0 rounded-full pointer-events-none"
                       style={{
                         background: 'radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.6) 0%, rgba(255, 255, 255, 0.2) 20%, transparent 50%)',
                       }}
                     />
-                    {/* Secondary highlight for liquid effect */}
                     <div
                       className="absolute inset-0 rounded-full pointer-events-none"
                       style={{
                         background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.3) 0%, transparent 40%, transparent 60%, rgba(255, 255, 255, 0.1) 100%)',
                       }}
                     />
-                    {/* Bottom reflection */}
                     <div
                       className="absolute bottom-0 left-0 right-0 h-1/3 rounded-full pointer-events-none"
                       style={{
@@ -594,13 +527,19 @@ export default function App() {
         </div>
       </div>
 
-      {/* Instructions and Button */}
       <div className={`absolute left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 md:gap-4 ${isMobile ? 'bottom-12' : 'bottom-2 md:bottom-8'}`}>
         {!isMobile && (
           <p className="text-white/60 text-center text-xs md:text-base">
-            Drag to spin for your prediction.
+            Drag to explore.
           </p>
         )}
+
+        {isMobile && (
+          <p className="text-white/60 text-center text-xs">
+            Drag to explore.
+          </p>
+        )}
+
         {isMobile && !shakeEnabled && (
           <button
             onClick={enableShake}
@@ -612,11 +551,13 @@ export default function App() {
             Enable Shake to Spin
           </button>
         )}
+
         {isMobile && shakeEnabled && (
           <p className="text-white/40 text-center text-xs">
             Shake your phone to spin
           </p>
         )}
+
         <button
           onClick={handleSpin}
           disabled={isSpinning}
@@ -627,6 +568,7 @@ export default function App() {
         >
           {isSpinning ? 'Spinning...' : (isMobile ? 'Get Prediction' : 'Spin for me')}
         </button>
+
         {isMobile && (
           <button
             onClick={toggleCamera}
@@ -640,12 +582,10 @@ export default function App() {
         )}
       </div>
 
-      {/* Attribution */}
       <div className="absolute bottom-0.5 md:bottom-1 left-1/2 -translate-x-1/2">
         <p className="text-white/40 italic text-center text-[8px] md:text-[10px]">A project by Liza Karimova.</p>
       </div>
 
-      {/* Camera Error Message */}
       {cameraError && (
         <div className="absolute top-16 left-1/2 -translate-x-1/2 bg-red-500 text-white px-4 py-2 rounded z-20">
           {cameraError}
